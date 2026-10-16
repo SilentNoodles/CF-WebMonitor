@@ -12,7 +12,7 @@ crons = ["*/5 * * * *"]
 # then paste the printed id below.
 [[kv_namespaces]]
 binding = "STATE"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "074d846b6e894476b67391136f32e645"
 
 # Non-secret settings. Secrets (Telegram token etc.) are set with
 # `wrangler secret put`, never committed. See README.
