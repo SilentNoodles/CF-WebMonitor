@@ -1,0 +1,24 @@
+name = "cf-webmonitor"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Run every 5 minutes. Free-tier friendly; do not go much tighter or the
+# site is more likely to rate-limit or block the Worker.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# Small key/value store for the last-seen state of each watch.
+# Create it once with:  npx wrangler kv namespace create STATE
+# then paste the printed id below.
+[[kv_namespaces]]
+binding = "STATE"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Non-secret settings. Secrets (Telegram token etc.) are set with
+# `wrangler secret put`, never committed. See README.
+[vars]
+# Consecutive failed checks (blocked / unexpected response) before a
+# "monitor is broken" alert is sent.
+FAILURE_ALERT_AFTER = "3"
+# While the product stays available, re-send the alert this often (minutes).
+REALERT_MINUTES = "30"

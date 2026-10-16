@@ -1,0 +1,5 @@
+# Copy to .dev.vars for local `npm run dev`. Never commit the real file.
+TELEGRAM_BOT_TOKEN=123456:replace-me
+TELEGRAM_CHAT_ID=123456789
+# Any long random string; protects the /status and /check endpoints.
+ADMIN_TOKEN=replace-me

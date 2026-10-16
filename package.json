@@ -1,0 +1,20 @@
+{
+  "name": "cf-webmonitor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight personal stock/page monitor on a Cloudflare Worker, alerting via Telegram.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
