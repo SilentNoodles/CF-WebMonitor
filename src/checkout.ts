@@ -93,6 +93,7 @@ export async function checkBuyNow(watch: Watch, fetcher: Fetcher = fetch): Promi
     chain.push(`${res.status} ${here.host}${here.pathname}`);
 
     if (res.status >= 300 && res.status < 400) {
+      await res.body?.cancel();
       const loc = res.headers.get("location");
       if (!loc) return { verdict: "FAILED", detail: `HTTP ${res.status} without a Location header`, chain };
       const next = new URL(loc, url);
