@@ -2,24 +2,22 @@
 
 Lightweight, personal-use stock monitor that runs on a **Cloudflare Worker** (cron trigger, KV for state) and alerts via **Telegram**. First target: the UK PlayStation "DualSense - Grand Theft Auto VI Black Limited Edition" controller, which is currently sold out. Keep it small: no framework, no runtime dependencies, free-tier friendly, no UI.
 
-## Status of this branch (`feat/initial-monitor`)
+## Status
 
-Drafted but **never compiled, tested or run**. The sandbox these files were written in could not reach the npm registry (`npm install` failed with ENOTFOUND), so `node_modules` was never installed and `tsc`/`vitest` were never run. Run `npm install && npm run typecheck` first and fix whatever it finds. Nothing has been exercised against the live site either:
+All the pieces are built: `src/checkout.ts`, `src/cta.ts`, `src/state.ts` (pure `decide()` plus message formatting), `src/telegram.ts`, `src/index.ts` (cron and `/status`, `/check`, `/test-alert`), plus vitest tests in `test/` and a `README.md`. `npm run check` and `npx wrangler deploy --dry-run --outdir dist` both pass.
 
-- `package.json`, `tsconfig.json`, `wrangler.toml` (cron `*/5 * * * *`, KV binding `STATE`, vars), `.gitignore`, `.dev.vars.example`
-- `src/types.ts` - `Env`, `Watch`, `Fetcher`
-- `src/watches.ts` - the one watch (edit here to add products)
-- `src/checkout.ts` - primary check: replays the buy-now redirect chain, returns a verdict
-- `src/cta.ts` - secondary check: product-page button/price lookup
+**Not yet done: the first live test** (see below). The build sandbox could not reach `api.cloudflare.com` or `checkout.playstation.com`, and has no Cloudflare credentials, so nothing has been exercised against the live site. Whether a Worker reaches `OUT_OF_STOCK` or gets `BLOCKED` is still unknown.
 
-**Still to build:**
+Implementation notes:
 
-1. `src/state.ts` - pure `decide(prev, observation, now, config)` returning the next stored state plus events to send (see "Alert rules"). Unit test it thoroughly; this is where silent-failure bugs would live.
-2. `src/telegram.ts` - `sendTelegram(env, text)` using `https://api.telegram.org/bot<token>/sendMessage`. If the secrets are unset, log instead of failing.
-3. `src/index.ts` - `scheduled()` runs every watch (both checks, concurrently), feeds results through `decide`, sends events, persists state. Plus a small `fetch()` handler (see "HTTP endpoints").
-4. Tests (`vitest`, mocked `fetch`) and fixtures for the checks (see "Testing").
-5. `README.md` - setup and deploy, including **how to create the Telegram bot** (the user has not made one yet): message @BotFather, `/newbot`, copy the token; message the new bot once, then read the chat id from `https://api.telegram.org/bot<token>/getUpdates`.
-6. Run `npm run check`, then `npx wrangler deploy --dry-run --outdir dist` to validate the bundle.
+- State is persisted per channel, and only when every Telegram send for that channel succeeded.
+- KV writes are skipped when only `lastCheckedAt` changed, with an hourly heartbeat (`shouldPersist`), to stay well under the free tier's 1,000 writes a day.
+- `CHANGED` signatures are keyed on the verdict detail, so the same change stays quiet and a different one re-alerts.
+- A return to `OUT_OF_STOCK` after an alert sends a silent "sold out again".
+
+### Request headers
+
+Both checks identify themselves honestly: `user-agent: cf-webmonitor (personal stock check)`, the normal `accept` / `accept-language`, and **no** `referer` (`REQUEST_HEADERS` in `src/checkout.ts`). Do not change them to imitate a browser. If the site blocks these requests, report the verdict and hop trail and pick a different signal.
 
 ## What we learned from the browser captures (the evidence behind the design)
 
@@ -30,7 +28,7 @@ Drafted but **never compiled, tested or run**. The sandbox these files were writ
   2. `/unified/buynow/<SKU>?clientId=...&hostUrl=...` -> 302 to
   3. `/unified/buynow/<SKU>?skuId=<SKU>&upSellService=NONE&clientId=...&hostUrl=...` -> 302 to
   4. `/error?skuId=<SKU>&upSellService=NONE&clientId=...` -> **200**, a ~300 KB Next.js page titled "Error | Checkout" whose `<script id="__NEXT_DATA__">` JSON has `props.pageProps.reason = "skuOutOfStock"`.
-- The HAR showed no cookies on those requests. The requests were iframe navigations with a normal Chrome user agent and `referer: https://www.playstation.com/`. `clientId` is public (it appears in the product page HTML). `nonce` is just a random number.
+- The HAR showed no cookies on those requests. `clientId` is public (it appears in the product page HTML). `nonce` is just a random number.
 - The SKU is `PSD001-PSDE02019_19-DUALSENSEGEYIO4E-E000YYCL3`; the product id (no `-E000YYCL3`) is `PSD001-PSDE02019_19-DUALSENSEGEYIO4E`.
 - **Bot protection:** after the error page loads, `checkout.playstation.com` serves a bot-detection script (randomised paths, `sensor_data` POSTs). The redirect chain happened before it, so plain requests may work, but this is **unverified from a Worker**. Cloudflare egress IPs may be blocked or challenged.
 - **Unknown:** what the chain does when the item is actually in stock. Assume it lands on a normal (non-`/error`) checkout page, possibly via a sign-in redirect off-site. The checks therefore treat "anything other than the known sold-out landing" as worth an alert.
