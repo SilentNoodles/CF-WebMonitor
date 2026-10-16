@@ -38,12 +38,15 @@ const BLOCK_STATUSES = new Set([403, 429, 503]);
 const BLOCK_BODY =
   /access denied|pardon our interruption|just a moment|attention required|captcha|unusual traffic|request blocked|bm-verify/i;
 
-export const BROWSER_HEADERS: Record<string, string> = {
+/**
+ * Sent on every request. The Worker identifies itself honestly: no browser
+ * user agent and no playstation.com referer. If the site blocks this, the
+ * answer is a different signal, not a disguise.
+ */
+export const REQUEST_HEADERS: Record<string, string> = {
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
   "accept-language": "en-GB,en;q=0.9",
-  referer: "https://www.playstation.com/",
-  "user-agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+  "user-agent": "cf-webmonitor (personal stock check)",
 };
 
 export function buildBuyNowUrl(watch: Watch, nonce = 1000 + Math.floor(Math.random() * 9000)): string {
@@ -82,7 +85,7 @@ export async function checkBuyNow(watch: Watch, fetcher: Fetcher = fetch): Promi
     try {
       res = await fetcher(url, {
         redirect: "manual",
-        headers: BROWSER_HEADERS,
+        headers: REQUEST_HEADERS,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (e) {

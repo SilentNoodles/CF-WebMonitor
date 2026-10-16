@@ -43,6 +43,17 @@ describe("checkBuyNow", () => {
     expect(f.calls.every((c) => c.init?.redirect === "manual")).toBe(true);
   });
 
+  it("identifies itself honestly: own user agent, no referer", async () => {
+    const f = mockFetch(soldOutRoutes());
+    await checkBuyNow(WATCH, f);
+    for (const c of f.calls) {
+      const h = new Headers(c.init?.headers);
+      expect(h.get("user-agent")).toBe("cf-webmonitor (personal stock check)");
+      expect(h.has("referer")).toBe(false);
+      expect(h.get("accept-language")).toBe("en-GB,en;q=0.9");
+    }
+  });
+
   it("chain ending on a normal checkout page -> AVAILABLE", async () => {
     const routes = soldOutRoutes();
     routes[`${CO}/unified/buynow/${WATCH.sku}`] = (url) =>

@@ -25,6 +25,14 @@ describe("checkCta", () => {
     expect(a.signature).not.toBe(b.signature);
   });
 
+  it("identifies itself honestly: own user agent, no referer", async () => {
+    const f = route(() => jsonResponse(ctaBody()));
+    await checkCta(WATCH, f);
+    const h = new Headers(f.calls[0]!.init?.headers);
+    expect(h.get("user-agent")).toBe("cf-webmonitor (personal stock check)");
+    expect(h.has("referer")).toBe(false);
+  });
+
   it("PersistedQueryNotFound -> not ok, with a hint", async () => {
     const r = await checkCta(WATCH, route(() => jsonResponse({ errors: [{ message: "PersistedQueryNotFound" }] })));
     expect(r.ok).toBe(false);

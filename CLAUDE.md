@@ -15,6 +15,10 @@ Implementation notes:
 - `CHANGED` signatures are keyed on the verdict detail, so the same change stays quiet and a different one re-alerts.
 - A return to `OUT_OF_STOCK` after an alert sends a silent "sold out again".
 
+### Request headers
+
+Both checks identify themselves honestly: `user-agent: cf-webmonitor (personal stock check)`, the normal `accept` / `accept-language`, and **no** `referer` (`REQUEST_HEADERS` in `src/checkout.ts`). Do not change them to imitate a browser. If the site blocks these requests, report the verdict and hop trail and pick a different signal.
+
 ## What we learned from the browser captures (the evidence behind the design)
 
 - **The product page cannot be used to detect stock.** `playstation.com/.../grand-theft-auto-vi-black-limited-edition/` is server-rendered and shows "Pre-Order" and 74.99 GBP even though the item is sold out.
@@ -24,7 +28,7 @@ Implementation notes:
   2. `/unified/buynow/<SKU>?clientId=...&hostUrl=...` -> 302 to
   3. `/unified/buynow/<SKU>?skuId=<SKU>&upSellService=NONE&clientId=...&hostUrl=...` -> 302 to
   4. `/error?skuId=<SKU>&upSellService=NONE&clientId=...` -> **200**, a ~300 KB Next.js page titled "Error | Checkout" whose `<script id="__NEXT_DATA__">` JSON has `props.pageProps.reason = "skuOutOfStock"`.
-- The HAR showed no cookies on those requests. The requests were iframe navigations with a normal Chrome user agent and `referer: https://www.playstation.com/`. `clientId` is public (it appears in the product page HTML). `nonce` is just a random number.
+- The HAR showed no cookies on those requests. `clientId` is public (it appears in the product page HTML). `nonce` is just a random number.
 - The SKU is `PSD001-PSDE02019_19-DUALSENSEGEYIO4E-E000YYCL3`; the product id (no `-E000YYCL3`) is `PSD001-PSDE02019_19-DUALSENSEGEYIO4E`.
 - **Bot protection:** after the error page loads, `checkout.playstation.com` serves a bot-detection script (randomised paths, `sensor_data` POSTs). The redirect chain happened before it, so plain requests may work, but this is **unverified from a Worker**. Cloudflare egress IPs may be blocked or challenged.
 - **Unknown:** what the chain does when the item is actually in stock. Assume it lands on a normal (non-`/error`) checkout page, possibly via a sign-in redirect off-site. The checks therefore treat "anything other than the known sold-out landing" as worth an alert.

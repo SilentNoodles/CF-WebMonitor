@@ -15,6 +15,8 @@ Every 5 minutes the Worker runs two checks per product:
 
 Buy-now verdicts are `OUT_OF_STOCK` (quiet), `AVAILABLE`, `CHANGED`, `BLOCKED` and `FAILED`.
 
+Requests identify themselves as `cf-webmonitor (personal stock check)` and send no referer. The Worker does not pretend to be a browser.
+
 ### What you get alerted about
 
 | Message | When |
@@ -102,7 +104,7 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" $WORKER/status
 
 **Check the first `/check` result.** The `buynow` entry should say `"verdict": "OUT_OF_STOCK"`.
 
-- If it says `BLOCKED`, PlayStation's bot protection is refusing requests from Cloudflare's network. Don't try to work around it. Instead, use a different signal or run the check from a different host.
+- If it says `BLOCKED`, PlayStation is refusing the Worker's honest requests. Don't work around it by imitating a browser. Note the `chain` (hop trail) and pick a different signal.
 - If it says `FAILED` or `CHANGED`, read the `chain` (hop trail) and `detail` fields.
 
 Watch the live logs with `npx wrangler tail`.

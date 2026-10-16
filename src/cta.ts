@@ -1,5 +1,5 @@
 import type { Fetcher, Watch } from "./types";
-import { BROWSER_HEADERS } from "./checkout";
+import { REQUEST_HEADERS } from "./checkout";
 
 /**
  * Secondary signal: the product page's own button/price lookup.
@@ -46,7 +46,7 @@ export async function checkCta(watch: Watch, fetcher: Fetcher = fetch): Promise<
   try {
     res = await fetcher(buildCtaUrl(watch.productId), {
       headers: {
-        ...BROWSER_HEADERS,
+        ...REQUEST_HEADERS,
         accept: "application/json",
         "content-type": "application/json",
         origin: "https://www.playstation.com",
