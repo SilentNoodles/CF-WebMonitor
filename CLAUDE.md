@@ -17,12 +17,16 @@ Implementation notes:
 
 ### Request headers
 
-Both checks identify themselves honestly: `user-agent: cf-webmonitor (personal stock check)`, the normal `accept` / `accept-language`, and **no** `referer` (`REQUEST_HEADERS` in `src/checkout.ts`). Do not change them to imitate a browser. If the site blocks these requests, report the verdict and hop trail and pick a different signal.
+Both checks send only `user-agent: cf-webmonitor (personal stock check)`, `accept` and `accept-language` (`REQUEST_HEADERS` in `src/checkout.ts`; the CTA check overrides `accept` to JSON). There is **no** `referer`, `origin`, `apollographql-client-name` or other site-specific header. Do not add headers that imitate a browser or the PlayStation site. If the site blocks these requests, or the CTA lookup will not answer without them, report the verdict and hop trail and pick a different signal; do not restore the headers.
+
+### CTA check is opt-in
+
+`CTA_CHECK` in `wrangler.toml` `[vars]` defaults to `"off"`; only `"on"` enables it (`ctaEnabled()` in `src/index.ts`). When off, the CTA lookup is not requested, no `<watch id>:cta` state is read or written, and `/status` omits it. It is off because it is unverified whether the GraphQL lookup answers without the site's origin/client-name headers; if not, enabling it would only produce "monitor is failing" alerts.
 
 ## What we learned from the browser captures (the evidence behind the design)
 
 - **The product page cannot be used to detect stock.** `playstation.com/.../grand-theft-auto-vi-black-limited-edition/` is server-rendered and shows "Pre-Order" and 74.99 GBP even though the item is sold out.
-- **The page's own button lookup is unreliable too.** `productRetrieveForCtasWithPrice` (GraphQL persisted query on `web.np.playstation.com`, plain GET, no cookies) returns `webctas[0].type = "PREORDER"`, `action.type = "BUY_NOW"` while checkout says sold out. It is kept only as a cheap secondary signal.
+- **The page's own button lookup is unreliable too.** `productRetrieveForCtasWithPrice` (GraphQL persisted query on `web.np.playstation.com`, plain GET, no cookies) returns `webctas[0].type = "PREORDER"`, `action.type = "BUY_NOW"` while checkout says sold out. It is kept only as a cheap secondary signal, and is off by default (`CTA_CHECK`).
 - **The real stock verdict comes from the buy-now flow**, which is plain server-side redirects (no JSON API, no JavaScript needed). Clicking Pre-Order did, three times with identical results:
   1. `GET https://checkout.playstation.com/buynow/<SKU>?clientId=...&hostUrl=<product page url + ?skuId=<SKU>&upSellService=NONE>&privacy-policy=minimal&nonce=<random 4 digits>&locale=en-GB` -> 302 to
   2. `/unified/buynow/<SKU>?clientId=...&hostUrl=...` -> 302 to
@@ -45,7 +49,7 @@ State is kept per watch per channel (`<watch id>:buynow`, `<watch id>:cta`) in K
 
 - **First run:** store a baseline. If the state is already non-quiet, alert immediately. If quiet, send a one-off "monitoring started, currently <state>" message (this doubles as a Telegram setup check).
 - **Buy-now channel:** `AVAILABLE` and `CHANGED` alert immediately on transition (wording for `CHANGED` should say "behaviour changed, check manually"). While it stays `AVAILABLE`, re-alert every `REALERT_MINUTES` (default 30). A `CHANGED` with the same reason does not repeat.
-- **CTA channel:** any change in the signature (button types, price, ineligibility flags) sends an informational alert. Never urgent.
+- **CTA channel** (only when `CTA_CHECK = "on"`): any change in the signature (button types, price, ineligibility flags) sends an informational alert. Never urgent.
 - **Failures** (`BLOCKED` / `FAILED` / CTA not ok): count consecutive failures; after `FAILURE_ALERT_AFTER` (default 3) send **one** "monitor is failing: <detail>" alert, then one "recovered" alert when a check succeeds again. Rationale: a silently broken monitor looks identical to "still out of stock", so failure must be loud.
 - **Persist state only if every Telegram send succeeded** (or Telegram is not configured). Otherwise the next run retries the transition and an alert is never lost.
 - Alerts include the watch name, what changed, the hop trail, and the product page link.

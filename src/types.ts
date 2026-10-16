@@ -8,6 +8,8 @@ export interface Env {
   /** Plain vars from wrangler.toml. */
   FAILURE_ALERT_AFTER?: string;
   REALERT_MINUTES?: string;
+  /** "on" to run the secondary product-page button check. Anything else disables it. */
+  CTA_CHECK?: string;
 }
 
 export type Fetcher = (input: string, init?: RequestInit) => Promise<Response>;

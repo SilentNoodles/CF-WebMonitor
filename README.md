@@ -6,16 +6,18 @@ It has no runtime dependencies and fits in Cloudflare's free tier. It has no UI.
 
 ## How it works
 
-Every 5 minutes the Worker runs two checks per product:
+Every 5 minutes the Worker checks each product. There are two checks; the second is **off by default**:
 
 | Channel  | What it does | Trust |
 |----------|--------------|-------|
 | `buynow` | Replays the "Pre-Order" button's redirect chain on `checkout.playstation.com` and reads where it lands. While sold out, the chain ends on `/error` with `reason: "skuOutOfStock"`. | **The real stock signal** |
-| `cta`    | Asks the product page's own button/price lookup (GraphQL). | Informational only. It reported `PREORDER` while the item was sold out. |
+| `cta`    | Asks the product page's own button/price lookup (GraphQL). **Off unless `CTA_CHECK = "on"`.** | Informational only. It reported `PREORDER` while the item was sold out. |
 
 Buy-now verdicts are `OUT_OF_STOCK` (quiet), `AVAILABLE`, `CHANGED`, `BLOCKED` and `FAILED`.
 
-Requests identify themselves as `cf-webmonitor (personal stock check)` and send no referer. The Worker does not pretend to be a browser.
+Both checks send only three headers: `user-agent: cf-webmonitor (personal stock check)`, `accept` and `accept-language`. There is no referer, origin or site client name; the Worker does not pretend to be a browser or the PlayStation site.
+
+The `cta` check is off by default because it's unverified whether the lookup answers without the site's own `origin` and client-name headers, which the Worker doesn't send. If it doesn't, turning it on would only produce "monitor is failing" alerts. To try it, set `CTA_CHECK = "on"` in `wrangler.toml`, run `npx wrangler deploy`, then call `/check`. If its result says `ERROR`, set it back to `"off"`.
 
 ### What you get alerted about
 
@@ -25,8 +27,8 @@ Requests identify themselves as `cf-webmonitor (personal stock check)` and send 
 | 🟠 **Checkout behaviour changed, check manually** | Checkout gives a different error, redirects off-site (e.g. to sign-in), or returns a 4xx. Sent once per distinct change. |
 | 🔴 **Monitor is failing** | 3 checks in a row were blocked (403/429/503 or challenge page) or failed (timeout, 5xx, redirect loop). Sent once, then ✅ **recovered** when a check works again. A broken monitor otherwise looks exactly like "still sold out". |
 | ⚪ Sold out again | Back to the normal sold-out response after an alert (silent). |
-| ℹ️ Product page button changed | The button/price lookup changed (silent; not a stock signal). |
-| Monitoring started | The first successful check of each channel (silent; doubles as a setup check). |
+| ℹ️ Product page button changed | The button/price lookup changed (silent; not a stock signal). Only with `CTA_CHECK = "on"`. |
+| Monitoring started | The first successful check of each enabled channel (silent; doubles as a setup check). |
 
 Urgent messages (🟢 🟠 🔴) make a sound. The rest are sent silently.
 
@@ -127,6 +129,7 @@ Non-secret settings live in `wrangler.toml` under `[vars]`:
 |---|---|---|
 | `FAILURE_ALERT_AFTER` | `3` | Consecutive failed checks before "monitor is failing". |
 | `REALERT_MINUTES` | `30` (min 5) | How often to repeat the in-stock alert while it stays available. |
+| `CTA_CHECK` | `off` | `on` enables the secondary product-page button check. Off by default; see above. |
 
 The cron is `*/5 * * * *`. Please don't make it faster.
 
@@ -136,14 +139,14 @@ To start fresh (e.g. to get the "Monitoring started" messages again), delete the
 
 ```sh
 npx wrangler kv key delete --remote --binding STATE "gta6-black-dualsense:buynow"
-npx wrangler kv key delete --remote --binding STATE "gta6-black-dualsense:cta"
+npx wrangler kv key delete --remote --binding STATE "gta6-black-dualsense:cta"   # only if CTA_CHECK was on
 ```
 
 ## Free-tier usage
 
-- **Requests:** about 288 cron runs a day, each making 5 or 6 requests.
-- **KV writes:** state is only written when something changes, plus one write an hour per channel. That's about 50 writes a day, against a free limit of 1,000.
-- **KV reads:** about 600 a day.
+- **Requests:** about 288 cron runs a day, each making 4 requests (5 with `CTA_CHECK` on), plus any Telegram messages.
+- **KV writes:** state is only written when something changes, plus one write an hour per enabled channel. That's at most about 50 writes a day, against a free limit of 1,000.
+- **KV reads:** about 300 a day (600 with `CTA_CHECK` on).
 
 ## Development
 

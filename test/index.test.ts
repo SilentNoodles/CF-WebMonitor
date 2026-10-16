@@ -15,13 +15,16 @@ import {
 
 const CO = "checkout.playstation.com";
 
-function setup(opts: { telegram?: boolean; telegramOk?: () => boolean; available?: () => boolean; admin?: string } = {}) {
+function setup(
+  opts: { telegram?: boolean; telegramOk?: () => boolean; available?: () => boolean; admin?: string; cta?: boolean } = {},
+) {
   const kv = new MemoryKV();
   const sent: { text: string; silent: boolean }[] = [];
   const env: Env = {
     STATE: kv as unknown as KVNamespace,
     FAILURE_ALERT_AFTER: "3",
     REALERT_MINUTES: "30",
+    CTA_CHECK: opts.cta === false ? "off" : "on",
     ...(opts.telegram === false ? {} : { TELEGRAM_BOT_TOKEN: "123:secret", TELEGRAM_CHAT_ID: "42" }),
     ...(opts.admin ? { ADMIN_TOKEN: opts.admin } : {}),
   };
@@ -131,6 +134,16 @@ describe("runChecks", () => {
     kinds.push((await runChecks(t.env, deps))[0]!.events);
     expect(kinds).toEqual([[], [], ["failing"], [], ["recovered"]]);
     expect(t.sent.some((s) => s.text.includes("Monitor is failing") && s.text.includes("HTTP 403"))).toBe(true);
+  });
+
+  it("with CTA_CHECK off (the default) only the buy-now check runs", async () => {
+    for (const env of [{ CTA_CHECK: "off" }, { CTA_CHECK: undefined }]) {
+      const t = setup();
+      const reports = await runChecks({ ...t.env, ...env }, t.deps);
+      expect(reports.map((r) => r.channel)).toEqual(["buynow"]);
+      expect(t.fetcher.calls.some((c) => c.url.includes(CTA_HOST))).toBe(false);
+      expect(t.kv.store.has(stateKey(WATCH, "cta"))).toBe(false);
+    }
   });
 
   it("without Telegram secrets it logs and still persists", async () => {

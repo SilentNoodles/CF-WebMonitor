@@ -48,8 +48,12 @@ export async function runChecks(env: Env, deps: RunDeps = {}): Promise<ChannelRe
   const reports: ChannelReport[] = [];
 
   for (const watch of deps.watches ?? WATCHES) {
-    const [buy, cta] = await Promise.all([checkBuyNow(watch, fetcher), checkCta(watch, fetcher)]);
-    const observations: Observation[] = [buyNowObservation(buy), ctaObservation(cta)];
+    const [buy, cta] = await Promise.all([
+      checkBuyNow(watch, fetcher),
+      ctaEnabled(env) ? checkCta(watch, fetcher) : Promise.resolve(null),
+    ]);
+    const observations: Observation[] = [buyNowObservation(buy)];
+    if (cta) observations.push(ctaObservation(cta));
 
     for (const obs of observations) {
       const key = stateKey(watch, obs.channel);
@@ -88,6 +92,11 @@ export async function runChecks(env: Env, deps: RunDeps = {}): Promise<ChannelRe
   return reports;
 }
 
+/** The CTA check is opt-in: CTA_CHECK = "on" in wrangler.toml. */
+export function ctaEnabled(env: Env): boolean {
+  return env.CTA_CHECK?.trim().toLowerCase() === "on";
+}
+
 async function readState(env: Env, key: string): Promise<ChannelState | null> {
   const raw = await env.STATE.get(key);
   if (!raw) return null;
@@ -110,13 +119,18 @@ async function handleFetch(request: Request, env: Env, deps: RunDeps): Promise<R
 
   if (route === "GET /status") {
     const out: Record<string, ChannelState | null> = {};
+    const channels = ctaEnabled(env) ? CHANNELS : CHANNELS.filter((c) => c !== "cta");
     for (const watch of deps.watches ?? WATCHES) {
-      for (const channel of CHANNELS) {
+      for (const channel of channels) {
         const key = stateKey(watch, channel);
         out[key] = await readState(env, key);
       }
     }
-    return json({ telegramConfigured: telegramConfigured(env), config: parseConfig(env), state: out });
+    return json({
+      telegramConfigured: telegramConfigured(env),
+      config: { ...parseConfig(env), ctaCheck: ctaEnabled(env) },
+      state: out,
+    });
   }
 
   if (route === "POST /check") {

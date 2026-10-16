@@ -49,7 +49,7 @@ describe("checkBuyNow", () => {
     for (const c of f.calls) {
       const h = new Headers(c.init?.headers);
       expect(h.get("user-agent")).toBe("cf-webmonitor (personal stock check)");
-      expect(h.has("referer")).toBe(false);
+      expect([...h.keys()].sort()).toEqual(["accept", "accept-language", "user-agent"]);
       expect(h.get("accept-language")).toBe("en-GB,en;q=0.9");
     }
   });

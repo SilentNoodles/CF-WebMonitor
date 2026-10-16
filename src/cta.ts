@@ -7,6 +7,10 @@ import { REQUEST_HEADERS } from "./checkout";
  * Observed behaviour: this still reports PREORDER while checkout says sold out,
  * so it is NOT a reliable stock signal. It is cheap, though, and may flip when
  * PlayStation updates the page, so we watch it and report any change.
+ *
+ * Off by default (CTA_CHECK in wrangler.toml): it is unverified whether the
+ * lookup answers without the site's own origin/client headers, and we do not
+ * send those.
  */
 
 const ENDPOINT = "https://web.np.playstation.com/api/graphql/v1/op";
@@ -45,14 +49,8 @@ export async function checkCta(watch: Watch, fetcher: Fetcher = fetch): Promise<
   let res: Response;
   try {
     res = await fetcher(buildCtaUrl(watch.productId), {
-      headers: {
-        ...REQUEST_HEADERS,
-        accept: "application/json",
-        "content-type": "application/json",
-        origin: "https://www.playstation.com",
-        "apollographql-client-name": "@sie-private/web-commerce-anywhere",
-        "x-psn-store-locale-override": "en-GB",
-      },
+      // Same honest headers as the buy-now check: no origin or site client name.
+      headers: { ...REQUEST_HEADERS, accept: "application/json" },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
